@@ -5,6 +5,8 @@ import kbRouter from './kb.js';
 import authRouter from './auth.js';
 import adminRouter from './admin.js';
 import nlpRouter from './nlp.js';
+import connectorsRouter from './connectors.js';
+import whatsappRouter from './whatsapp.js';
 
 const router = Router();
 
@@ -15,6 +17,8 @@ router.use('/messages', messagesRouter);
 router.use('/kb', kbRouter);
 router.use('/admin', adminRouter);
 router.use('/nlp', nlpRouter);
+router.use('/connectors', connectorsRouter);
+router.use('/whatsapp', whatsappRouter);
 
 // Root endpoint
 router.get('/', (req, res) => {
@@ -28,6 +32,8 @@ router.get('/', (req, res) => {
       kb: '/api/v1/kb',
       admin: '/api/v1/admin',
       nlp: '/api/v1/nlp',
+      connectors: '/api/v1/connectors',
+      whatsapp: '/api/v1/whatsapp',
     },
   });
 });

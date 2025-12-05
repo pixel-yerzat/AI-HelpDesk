@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Connection - HelpDesk AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .qr-container {
+      background: linear-gradient(135deg, #128C7E 0%, #075E54 100%);
+    }
+    .status-dot {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div id="app" class="container mx-auto px-4 py-8 max-w-2xl">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center">
+          <svg class="w-10 h-10 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+          <div class="ml-4">
+            <h1 class="text-2xl font-bold text-gray-800">WhatsApp Connection</h1>
+            <p class="text-gray-500">HelpDesk AI Integration</p>
+          </div>
+        </div>
+        <div id="status-badge" class="flex items-center px-3 py-1 rounded-full bg-gray-200">
+          <span class="status-dot w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
+          <span class="text-sm text-gray-600">Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="content" class="bg-white rounded-lg shadow-md overflow-hidden">
+      <!-- Loading State -->
+      <div id="loading" class="p-12 text-center">
+        <svg class="spinner w-12 h-12 mx-auto text-green-600" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="mt-4 text-gray-600">Загрузка...</p>
+      </div>
+
+      <!-- Disconnected State -->
+      <div id="disconnected" class="hidden p-8 text-center">
+        <div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
+          <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3"></path>
+          </svg>
+        </div>
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">WhatsApp не подключен</h2>
+        <p class="text-gray-500 mb-6">Нажмите кнопку ниже, чтобы начать подключение</p>
+        <button onclick="startConnection()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+          Подключить WhatsApp
+        </button>
+      </div>
+
+      <!-- QR Code State -->
+      <div id="qr-state" class="hidden">
+        <div class="qr-container p-8 text-center text-white">
+          <h2 class="text-2xl font-bold mb-2">Отсканируйте QR-код</h2>
+          <p class="opacity-80 mb-6">Откройте WhatsApp на телефоне → Меню → Связанные устройства → Привязка устройства</p>
+        </div>
+        <div class="p-8 flex justify-center">
+          <div id="qr-code" class="bg-white p-4 rounded-lg shadow-lg">
+            <img id="qr-image" src="" alt="QR Code" class="w-64 h-64">
+          </div>
+        </div>
+        <div class="px-8 pb-8 text-center">
+          <p class="text-sm text-gray-500">QR-код обновится автоматически</p>
+          <button onclick="cancelConnection()" class="mt-4 text-red-600 hover:text-red-700">
+            Отменить
+          </button>
+        </div>
+      </div>
+
+      <!-- Connected State -->
+      <div id="connected" class="hidden p-8">
+        <div class="text-center mb-8">
+          <div class="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <svg class="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h2 class="text-xl font-semibold text-gray-800 mb-2">WhatsApp подключен!</h2>
+        </div>
+
+        <div class="bg-gray-50 rounded-lg p-6 mb-6">
+          <h3 class="font-medium text-gray-700 mb-4">Информация об аккаунте</h3>
+          <div class="space-y-3">
+            <div class="flex justify-between">
+              <span class="text-gray-500">Номер телефона:</span>
+              <span id="phone-number" class="font-medium">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Имя:</span>
+              <span id="push-name" class="font-medium">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Платформа:</span>
+              <span id="platform" class="font-medium">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Test Message -->
+        <div class="bg-gray-50 rounded-lg p-6 mb-6">
+          <h3 class="font-medium text-gray-700 mb-4">Отправить тестовое сообщение</h3>
+          <div class="space-y-4">
+            <input type="text" id="test-phone" placeholder="Номер (например: 77001234567)" 
+                   class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            <textarea id="test-message" placeholder="Текст сообщения" rows="2"
+                      class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"></textarea>
+            <button onclick="sendTestMessage()" class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              Отправить
+            </button>
+          </div>
+          <div id="test-result" class="mt-4 hidden"></div>
+        </div>
+
+        <div class="flex justify-center space-x-4">
+          <button onclick="disconnect()" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            Отключить
+          </button>
+          <button onclick="logout()" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            Выйти из аккаунта
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="mt-6 bg-white rounded-lg shadow-md p-6">
+      <h3 class="font-medium text-gray-700 mb-4">Журнал событий</h3>
+      <div id="event-log" class="h-48 overflow-y-auto bg-gray-900 rounded-lg p-4 font-mono text-sm text-green-400">
+        <div class="opacity-50">Ожидание событий...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const API_BASE = '/api/v1/whatsapp';
+    let eventSource = null;
+    let authToken = localStorage.getItem('token') || '';
+
+    // Show auth prompt if no token
+    if (!authToken) {
+      authToken = prompt('Введите токен авторизации (JWT):');
+      if (authToken) {
+        localStorage.setItem('token', authToken);
+      }
+    }
+
+    // Fetch with auth
+    async function apiFetch(endpoint, options = {}) {
+      const response = await fetch(API_BASE + endpoint, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          ...options.headers,
+        },
+      });
+      
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        alert('Токен недействителен. Перезагрузите страницу.');
+        location.reload();
+      }
+      
+      return response.json();
+    }
+
+    // Log event
+    function logEvent(message, type = 'info') {
+      const log = document.getElementById('event-log');
+      const time = new Date().toLocaleTimeString();
+      const colors = {
+        info: 'text-green-400',
+        error: 'text-red-400',
+        warning: 'text-yellow-400',
+        success: 'text-blue-400',
+      };
+      
+      const entry = document.createElement('div');
+      entry.className = colors[type] || colors.info;
+      entry.textContent = `[${time}] ${message}`;
+      log.insertBefore(entry, log.firstChild);
+      
+      // Keep only last 50 entries
+      while (log.children.length > 50) {
+        log.removeChild(log.lastChild);
+      }
+    }
+
+    // Update UI based on state
+    function updateUI(state) {
+      const loading = document.getElementById('loading');
+      const disconnected = document.getElementById('disconnected');
+      const qrState = document.getElementById('qr-state');
+      const connected = document.getElementById('connected');
+      const badge = document.getElementById('status-badge');
+
+      // Hide all
+      loading.classList.add('hidden');
+      disconnected.classList.add('hidden');
+      qrState.classList.add('hidden');
+      connected.classList.add('hidden');
+
+      switch (state.connectionState) {
+        case 'disconnected':
+          disconnected.classList.remove('hidden');
+          badge.innerHTML = `
+            <span class="status-dot w-2 h-2 rounded-full bg-gray-400 mr-2"></span>
+            <span class="text-sm text-gray-600">Отключен</span>
+          `;
+          badge.className = 'flex items-center px-3 py-1 rounded-full bg-gray-200';
+          break;
+
+        case 'qr_pending':
+          qrState.classList.remove('hidden');
+          if (state.qrCodeDataUrl) {
+            document.getElementById('qr-image').src = state.qrCodeDataUrl;
+          }
+          badge.innerHTML = `
+            <span class="status-dot w-2 h-2 rounded-full bg-yellow-400 mr-2"></span>
+            <span class="text-sm text-yellow-700">Ожидание сканирования</span>
+          `;
+          badge.className = 'flex items-center px-3 py-1 rounded-full bg-yellow-100';
+          break;
+
+        case 'connecting':
+          loading.classList.remove('hidden');
+          badge.innerHTML = `
+            <span class="status-dot w-2 h-2 rounded-full bg-blue-400 mr-2"></span>
+            <span class="text-sm text-blue-700">Подключение...</span>
+          `;
+          badge.className = 'flex items-center px-3 py-1 rounded-full bg-blue-100';
+          break;
+
+        case 'connected':
+          connected.classList.remove('hidden');
+          if (state.clientInfo) {
+            document.getElementById('phone-number').textContent = '+' + (state.clientInfo.phoneNumber || '-');
+            document.getElementById('push-name').textContent = state.clientInfo.pushname || '-';
+            document.getElementById('platform').textContent = state.clientInfo.platform || '-';
+          }
+          badge.innerHTML = `
+            <span class="status-dot w-2 h-2 rounded-full bg-green-400 mr-2"></span>
+            <span class="text-sm text-green-700">Подключен</span>
+          `;
+          badge.className = 'flex items-center px-3 py-1 rounded-full bg-green-100';
+          break;
+
+        default:
+          disconnected.classList.remove('hidden');
+      }
+    }
+
+    // Start SSE connection
+    function startEventStream() {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      eventSource = new EventSource(`${API_BASE}/events?token=${encodeURIComponent(authToken)}`);
+      
+      // Note: SSE doesn't support custom headers, so we'd need to use query params or cookies
+      // For now, the /events endpoint should handle auth differently or we use polling
+
+      eventSource.addEventListener('state', (e) => {
+        const state = JSON.parse(e.data);
+        updateUI(state);
+        logEvent(`Состояние: ${state.connectionState}`);
+      });
+
+      eventSource.addEventListener('qr', (e) => {
+        const data = JSON.parse(e.data);
+        document.getElementById('qr-image').src = data.qrDataUrl;
+        logEvent('Получен новый QR-код');
+      });
+
+      eventSource.addEventListener('ready', (e) => {
+        const data = JSON.parse(e.data);
+        logEvent('WhatsApp подключен!', 'success');
+      });
+
+      eventSource.addEventListener('disconnected', (e) => {
+        const data = JSON.parse(e.data);
+        logEvent(`Отключен: ${data.reason}`, 'warning');
+      });
+
+      eventSource.addEventListener('auth_failure', (e) => {
+        const data = JSON.parse(e.data);
+        logEvent(`Ошибка авторизации: ${data.message}`, 'error');
+      });
+
+      eventSource.onerror = () => {
+        logEvent('Потеряно соединение с сервером, переподключение...', 'warning');
+        setTimeout(startEventStream, 5000);
+      };
+    }
+
+    // Initial load
+    async function init() {
+      try {
+        const status = await apiFetch('/status');
+        updateUI(status);
+        logEvent('Статус загружен');
+        
+        // Start SSE for real-time updates (with fallback to polling)
+        // startEventStream(); // Uncomment when SSE auth is fixed
+        
+        // For now, poll every 3 seconds
+        setInterval(async () => {
+          try {
+            const status = await apiFetch('/status');
+            updateUI(status);
+          } catch (e) {
+            // Ignore polling errors
+          }
+        }, 3000);
+        
+      } catch (error) {
+        logEvent(`Ошибка: ${error.message}`, 'error');
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('disconnected').classList.remove('hidden');
+      }
+    }
+
+    // Start connection
+    async function startConnection() {
+      logEvent('Запуск подключения...');
+      try {
+        const result = await apiFetch('/connect', { method: 'POST' });
+        if (result.qrCodeDataUrl) {
+          document.getElementById('qr-image').src = result.qrCodeDataUrl;
+        }
+        updateUI(result);
+        logEvent(result.message);
+      } catch (error) {
+        logEvent(`Ошибка: ${error.message}`, 'error');
+      }
+    }
+
+    // Cancel connection
+    async function cancelConnection() {
+      logEvent('Отмена подключения...');
+      try {
+        await apiFetch('/disconnect', { method: 'POST' });
+        const status = await apiFetch('/status');
+        updateUI(status);
+        logEvent('Подключение отменено');
+      } catch (error) {
+        logEvent(`Ошибка: ${error.message}`, 'error');
+      }
+    }
+
+    // Disconnect
+    async function disconnect() {
+      if (!confirm('Отключить WhatsApp?')) return;
+      logEvent('Отключение...');
+      try {
+        await apiFetch('/disconnect', { method: 'POST' });
+        const status = await apiFetch('/status');
+        updateUI(status);
+        logEvent('WhatsApp отключен');
+      } catch (error) {
+        logEvent(`Ошибка: ${error.message}`, 'error');
+      }
+    }
+
+    // Logout
+    async function logout() {
+      if (!confirm('Выйти из аккаунта? Потребуется повторное сканирование QR-кода.')) return;
+      logEvent('Выход из аккаунта...');
+      try {
+        await apiFetch('/disconnect', { 
+          method: 'POST',
+          body: JSON.stringify({ logout: true }),
+        });
+        const status = await apiFetch('/status');
+        updateUI(status);
+        logEvent('Выход выполнен');
+      } catch (error) {
+        logEvent(`Ошибка: ${error.message}`, 'error');
+      }
+    }
+
+    // Send test message
+    async function sendTestMessage() {
+      const phone = document.getElementById('test-phone').value.trim();
+      const message = document.getElementById('test-message').value.trim();
+      const resultDiv = document.getElementById('test-result');
+
+      if (!phone || !message) {
+        resultDiv.className = 'mt-4 p-3 bg-red-100 text-red-700 rounded-lg';
+        resultDiv.textContent = 'Заполните номер и сообщение';
+        resultDiv.classList.remove('hidden');
+        return;
+      }
+
+      logEvent(`Отправка сообщения на ${phone}...`);
+      
+      try {
+        const result = await apiFetch('/test-send', {
+          method: 'POST',
+          body: JSON.stringify({ phoneNumber: phone, message }),
+        });
+
+        if (result.success) {
+          resultDiv.className = 'mt-4 p-3 bg-green-100 text-green-700 rounded-lg';
+          resultDiv.textContent = 'Сообщение отправлено!';
+          logEvent('Тестовое сообщение отправлено', 'success');
+        } else {
+          resultDiv.className = 'mt-4 p-3 bg-red-100 text-red-700 rounded-lg';
+          resultDiv.textContent = result.message || 'Ошибка отправки';
+          logEvent(`Ошибка: ${result.message}`, 'error');
+        }
+      } catch (error) {
+        resultDiv.className = 'mt-4 p-3 bg-red-100 text-red-700 rounded-lg';
+        resultDiv.textContent = error.message;
+        logEvent(`Ошибка: ${error.message}`, 'error');
+      }
+      
+      resultDiv.classList.remove('hidden');
+    }
+
+    // Initialize
+    init();
+  </script>
+</body>
+</html>

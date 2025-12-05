@@ -107,13 +107,14 @@ services:
     volumes:
       - ./src:/app/src:ro
       - ./logs:/app/logs
+      - whatsapp_sessions:/app/data/whatsapp-sessions
 
   # Ticket Processor Worker (for NLP pipeline)
-  worker:
+  worker-processor:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: helpdesk-worker
+    container_name: helpdesk-worker-processor
     restart: unless-stopped
     command: node src/workers/ticketProcessor.js
     environment:
@@ -134,11 +135,67 @@ services:
     volumes:
       - ./src:/app/src:ro
 
+  # Telegram Bot Worker
+  worker-telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: helpdesk-worker-telegram
+    restart: unless-stopped
+    command: node src/workers/telegramBot.js
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: helpdesk
+      DB_USER: helpdesk
+      DB_PASSWORD: helpdesk_secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    depends_on:
+      - backend
+    volumes:
+      - ./src:/app/src:ro
+
+  # Outbound Message Sender Worker
+  worker-outbound:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: helpdesk-worker-outbound
+    restart: unless-stopped
+    command: node src/workers/outboundSender.js
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: helpdesk
+      DB_USER: helpdesk
+      DB_PASSWORD: helpdesk_secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      IMAP_HOST: ${IMAP_HOST:-}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    depends_on:
+      - backend
+    volumes:
+      - ./src:/app/src:ro
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
   qdrant_data:
+  whatsapp_sessions:
 
 networks:
   default:

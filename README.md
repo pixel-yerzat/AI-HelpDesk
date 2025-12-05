@@ -259,6 +259,127 @@ helpdesk-ai/
 - Health check: `GET /health`
 - Logs: `./logs/` или stdout в Docker
 
+## Коннекторы (Каналы)
+
+### WhatsApp (через QR-код)
+
+WhatsApp подключается через QR-код, как WhatsApp Web. Сессия сохраняется локально.
+
+**Подключение через веб-интерфейс:**
+1. Откройте `http://localhost:3000/admin/whatsapp.html`
+2. Авторизуйтесь с JWT токеном
+3. Нажмите "Подключить WhatsApp"
+4. Отсканируйте QR-код в WhatsApp на телефоне
+
+**API управления:**
+```bash
+# Получить статус
+GET /api/v1/whatsapp/status
+
+# Получить QR-код
+GET /api/v1/whatsapp/qr
+
+# Начать подключение (генерирует QR)
+POST /api/v1/whatsapp/connect
+
+# Отключить
+POST /api/v1/whatsapp/disconnect
+{ "logout": false }  # logout: true для выхода из аккаунта
+
+# Отправить тестовое сообщение
+POST /api/v1/whatsapp/test-send
+{ "phoneNumber": "77001234567", "message": "Test" }
+
+# Проверить номер в WhatsApp
+POST /api/v1/whatsapp/check-number
+{ "phoneNumber": "77001234567" }
+
+# SSE для real-time обновлений
+GET /api/v1/whatsapp/events
+```
+
+**Важно:**
+- Требуется Chrome/Chromium для puppeteer
+- Сессия сохраняется в `./data/whatsapp-sessions/`
+- При logout нужно заново сканировать QR
+- В Docker нужны дополнительные флаги для puppeteer
+
+### Telegram Bot
+
+Поддерживает два режима работы:
+
+**Polling (для разработки):**
+```bash
+npm run worker:telegram
+```
+
+**Webhook (для production):**
+1. Установите `TELEGRAM_WEBHOOK_URL` в `.env`
+2. Telegram будет отправлять обновления на `/api/v1/connectors/telegram/webhook`
+
+Функции:
+- Приём текстовых сообщений, фото, документов
+- Отправка ответов с форматированием (HTML)
+- Inline-кнопки для подтверждения решения и оценки
+- Команды: `/start`, `/help`, `/status`
+
+### Email (IMAP/SMTP)
+
+**Настройка в `.env`:**
+```
+IMAP_HOST=imap.example.com
+IMAP_PORT=993
+IMAP_USER=support@example.com
+IMAP_PASSWORD=password
+IMAP_TLS=true
+
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=support@example.com
+SMTP_PASSWORD=password
+SMTP_FROM=Support <support@example.com>
+```
+
+Функции:
+- Polling IMAP каждые 30 секунд
+- Автоматическое определение тредов (In-Reply-To, References)
+- Фильтрация автоответов
+- Очистка quoted text
+- Обработка вложений
+
+### Запуск воркеров
+
+```bash
+# Все воркеры через Docker Compose
+docker compose up -d
+
+# Отдельно для разработки:
+npm run worker:processor   # NLP обработка тикетов
+npm run worker:telegram    # Telegram бот
+npm run worker:outbound    # Отправка сообщений
+```
+
+### API управления коннекторами
+
+```bash
+# Статус всех коннекторов
+GET /api/v1/connectors/status
+
+# Статус конкретного коннектора
+GET /api/v1/connectors/status/telegram
+
+# Конфигурация (без секретов)
+GET /api/v1/connectors/config
+
+# Тестовая отправка
+POST /api/v1/connectors/test-send
+{
+  "connector": "telegram",
+  "recipient": "123456789",
+  "message": "Test message"
+}
+```
+
 ## NLP Pipeline
 
 Система использует LLM (Claude/OpenAI) для:
