@@ -15,6 +15,7 @@
     "worker:processor": "node src/workers/ticketProcessor.js",
     "worker:outbound": "node src/workers/outboundSender.js",
     "worker:telegram": "node src/workers/telegramBot.js",
+    "worker:whatsapp": "node src/workers/whatsappBot.js",
     "worker:kb-indexer": "node src/workers/kbIndexer.js index-all",
     "kb:index": "node src/workers/kbIndexer.js index-all",
     "kb:stats": "node src/workers/kbIndexer.js stats"

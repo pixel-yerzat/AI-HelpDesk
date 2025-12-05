@@ -263,46 +263,46 @@ helpdesk-ai/
 
 ### WhatsApp (через QR-код)
 
-WhatsApp подключается через QR-код, как WhatsApp Web. Сессия сохраняется локально.
+WhatsApp полностью интегрирован в систему тикетов. Подключается через QR-код, как WhatsApp Web.
 
-**Подключение через веб-интерфейс:**
-1. Откройте `http://localhost:3000/admin/whatsapp.html`
-2. Авторизуйтесь с JWT токеном
+**Возможности:**
+- Приём сообщений → создание тикетов
+- Автоответы из базы знаний (RAG)
+- Отправка ответов операторов
+- Подтверждение решения (текстом "Да"/"Нет")
+- Оценка качества (числом 1-5)
+- Обработка изображений, документов, голосовых
+
+**Подключение:**
+1. Запустите worker: `npm run worker:whatsapp`
+2. Откройте `http://localhost:3000/admin/whatsapp.html`
 3. Нажмите "Подключить WhatsApp"
-4. Отсканируйте QR-код в WhatsApp на телефоне
+4. Отсканируйте QR-код в WhatsApp → Связанные устройства
+
+**Текстовые команды пользователя:**
+- `Да`, `Yes`, `Помогло`, `Спасибо` → подтверждение решения
+- `Нет`, `No`, `Не помогло` → запрос помощи оператора
+- `1`-`5` → оценка качества поддержки
 
 **API управления:**
 ```bash
-# Получить статус
-GET /api/v1/whatsapp/status
+GET  /api/v1/whatsapp/status      # Статус подключения
+GET  /api/v1/whatsapp/qr          # Получить QR-код
+POST /api/v1/whatsapp/connect     # Начать подключение
+POST /api/v1/whatsapp/disconnect  # Отключить
+POST /api/v1/whatsapp/test-send   # Тест отправки
+GET  /api/v1/whatsapp/events      # SSE real-time
+```
 
-# Получить QR-код
-GET /api/v1/whatsapp/qr
-
-# Начать подключение (генерирует QR)
-POST /api/v1/whatsapp/connect
-
-# Отключить
-POST /api/v1/whatsapp/disconnect
-{ "logout": false }  # logout: true для выхода из аккаунта
-
-# Отправить тестовое сообщение
-POST /api/v1/whatsapp/test-send
-{ "phoneNumber": "77001234567", "message": "Test" }
-
-# Проверить номер в WhatsApp
-POST /api/v1/whatsapp/check-number
-{ "phoneNumber": "77001234567" }
-
-# SSE для real-time обновлений
-GET /api/v1/whatsapp/events
+**Docker:**
+```bash
+docker compose up -d worker-whatsapp
 ```
 
 **Важно:**
-- Требуется Chrome/Chromium для puppeteer
 - Сессия сохраняется в `./data/whatsapp-sessions/`
-- При logout нужно заново сканировать QR
-- В Docker нужны дополнительные флаги для puppeteer
+- При `logout` нужно заново сканировать QR
+- Один номер = один бот (ограничение WhatsApp)
 
 ### Telegram Bot
 

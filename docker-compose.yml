@@ -190,6 +190,30 @@ services:
     volumes:
       - ./src:/app/src:ro
 
+  # WhatsApp Bot Worker
+  worker-whatsapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: helpdesk-worker-whatsapp
+    restart: unless-stopped
+    command: node src/workers/whatsappBot.js
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: helpdesk
+      DB_USER: helpdesk
+      DB_PASSWORD: helpdesk_secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      WHATSAPP_AUTO_START: "false"
+    depends_on:
+      - backend
+    volumes:
+      - ./src:/app/src:ro
+      - whatsapp_sessions:/app/data/whatsapp-sessions
+
 volumes:
   postgres_data:
   redis_data:

@@ -219,6 +219,12 @@ class ConnectorManager {
     const connector = this.getConnector(source);
     if (!connector) return;
 
+    // Check if connector is running (especially for WhatsApp which may not be connected)
+    if (!connector.isRunning && source === 'whatsapp') {
+      this.logger.debug('WhatsApp not connected, skipping acknowledgment');
+      return;
+    }
+
     try {
       if (source === 'telegram') {
         await connector.sendTicketCreated(
@@ -232,6 +238,12 @@ class ConnectorManager {
           ticket.id,
           ticket.subject,
           ticket.raw?.messageId
+        );
+      } else if (source === 'whatsapp') {
+        await connector.sendTicketCreated(
+          sourceId,
+          ticket.id,
+          ticket.summary || ticket.subject
         );
       }
     } catch (error) {
@@ -372,23 +384,49 @@ class ConnectorManager {
    * Handle feedback from user
    */
   async handleFeedback(feedbackData) {
-    const { ticketId, rating, userId, source } = feedbackData;
+    const { ticketId, chatId, rating, userId, source } = feedbackData;
 
-    this.logger.info('Feedback received', { ticketId, rating, source });
+    this.logger.info('Feedback received', { ticketId, chatId, rating, source });
 
     try {
+      // For WhatsApp, we need to find the ticket by chatId
+      let targetTicketId = ticketId;
+      
+      if (!targetTicketId && chatId && source === 'whatsapp') {
+        // Get most recent resolved ticket for this chat
+        const ticket = await Ticket.getTicketBySourceId('whatsapp', chatId);
+        if (ticket) {
+          targetTicketId = ticket.id;
+        }
+      }
+
+      if (!targetTicketId) {
+        this.logger.warn('No ticket found for feedback', { chatId, source });
+        return;
+      }
+
       // Save feedback to database
-      await Ticket.addTicketMessage(ticketId, {
+      await Ticket.addTicketMessage(targetTicketId, {
         sender: userId,
         senderType: 'user',
         content: `Оценка: ${rating} ⭐`,
       });
 
+      // Thank user for feedback
+      if (source === 'whatsapp') {
+        const connector = this.getConnector('whatsapp');
+        if (connector && connector.isRunning) {
+          await connector.sendMessage(chatId, 
+            `Спасибо за оценку ${rating} ⭐! Ваше мнение важно для нас.`
+          );
+        }
+      }
+
       // Could also save to separate feedback table for analytics
-      // await Feedback.create({ ticketId, rating, userId, source });
+      // await Feedback.create({ ticketId: targetTicketId, rating, userId, source });
 
     } catch (error) {
-      this.logger.error('Error handling feedback', { ticketId, error: error.message });
+      this.logger.error('Error handling feedback', { ticketId: targetTicketId, error: error.message });
     }
   }
 
@@ -396,31 +434,76 @@ class ConnectorManager {
    * Handle confirmation (was solution helpful?)
    */
   async handleConfirmation(confirmationData) {
-    const { ticketId, action, userId, source } = confirmationData;
+    const { ticketId, chatId, action, userId, source } = confirmationData;
 
-    this.logger.info('Confirmation received', { ticketId, action, source });
+    this.logger.info('Confirmation received', { ticketId, chatId, action, source });
 
     try {
+      // For WhatsApp, we need to find the ticket by chatId
+      let targetTicketId = ticketId;
+      
+      if (!targetTicketId && chatId && source === 'whatsapp') {
+        const ticket = await Ticket.getTicketBySourceId('whatsapp', chatId);
+        if (ticket) {
+          targetTicketId = ticket.id;
+        }
+      }
+
+      if (!targetTicketId) {
+        this.logger.warn('No ticket found for confirmation', { chatId, source });
+        
+        // Send message that we couldn't find the ticket
+        if (source === 'whatsapp') {
+          const connector = this.getConnector('whatsapp');
+          if (connector && connector.isRunning) {
+            await connector.sendMessage(chatId, 
+              '❓ Не нашли активную заявку. Если у вас есть вопрос, просто напишите его.'
+            );
+          }
+        }
+        return;
+      }
+
       if (action === 'yes') {
         // Mark ticket as resolved
-        await Ticket.updateTicket(ticketId, {
+        await Ticket.updateTicket(targetTicketId, {
           status: 'resolved',
           resolved_by: 'auto_confirmed',
           resolution_text: 'Пользователь подтвердил решение',
         });
+
+        // Send thank you message for WhatsApp
+        if (source === 'whatsapp') {
+          const connector = this.getConnector('whatsapp');
+          if (connector && connector.isRunning) {
+            await connector.sendMessage(chatId, 
+              '✅ Отлично! Рады, что смогли помочь. Если возникнут вопросы — пишите!'
+            );
+          }
+        }
       } else {
         // Route to operator
-        await Ticket.updateTicket(ticketId, { status: 'in_progress' });
+        await Ticket.updateTicket(targetTicketId, { status: 'in_progress' });
         
-        await Ticket.addTicketMessage(ticketId, {
+        await Ticket.addTicketMessage(targetTicketId, {
           sender: 'system',
           senderType: 'system',
           content: 'Пользователь указал, что автоматический ответ не помог. Требуется помощь оператора.',
         });
+
+        // Notify user for WhatsApp
+        if (source === 'whatsapp') {
+          const connector = this.getConnector('whatsapp');
+          if (connector && connector.isRunning) {
+            await connector.sendMessage(chatId, 
+              '📝 Понял, передаю ваш запрос оператору. Ожидайте ответа.'
+            );
+          }
+        }
       }
 
     } catch (error) {
-      this.logger.error('Error handling confirmation', { ticketId, error: error.message });
+      this.logger.error('Error handling confirmation', { ticketId: targetTicketId, error: error.message });
     }
   }
 

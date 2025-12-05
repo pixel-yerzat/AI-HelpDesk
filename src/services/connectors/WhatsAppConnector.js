@@ -311,6 +311,39 @@ export class WhatsAppConnector extends BaseConnector {
     let body = msg.body || '';
     const attachments = [];
 
+    // Check for confirmation responses (Да/Нет)
+    const lowerBody = body.toLowerCase().trim();
+    if (['да', 'yes', 'помогло', 'решено', 'спасибо'].includes(lowerBody)) {
+      this.emit('confirmation', {
+        chatId,
+        action: 'yes',
+        userId: senderNumber,
+        source: 'whatsapp',
+      });
+      return;
+    }
+    
+    if (['нет', 'no', 'не помогло', 'не работает'].includes(lowerBody)) {
+      this.emit('confirmation', {
+        chatId,
+        action: 'no',
+        userId: senderNumber,
+        source: 'whatsapp',
+      });
+      return;
+    }
+
+    // Check for rating (1-5)
+    if (/^[1-5]$/.test(lowerBody)) {
+      this.emit('feedback', {
+        chatId,
+        rating: parseInt(lowerBody),
+        userId: senderNumber,
+        source: 'whatsapp',
+      });
+      return;
+    }
+
     // Handle media messages
     if (msg.hasMedia) {
       try {
