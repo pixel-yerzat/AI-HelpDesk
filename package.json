@@ -12,7 +12,10 @@
     "lint": "eslint src/",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
-    "worker:processor": "node src/workers/ticketProcessor.js"
+    "worker:processor": "node src/workers/ticketProcessor.js",
+    "worker:kb-indexer": "node src/workers/kbIndexer.js index-all",
+    "kb:index": "node src/workers/kbIndexer.js index-all",
+    "kb:stats": "node src/workers/kbIndexer.js stats"
   },
   "dependencies": {
     "express": "^4.18.2",

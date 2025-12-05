@@ -134,6 +134,53 @@ PUT /api/v1/kb/:id
 DELETE /api/v1/kb/:id
 ```
 
+### NLP / AI
+
+```bash
+# Classify text
+POST /api/v1/nlp/classify
+{
+  "subject": "Не работает VPN",
+  "body": "При подключении ошибка 789"
+}
+
+# Generate RAG response
+POST /api/v1/nlp/generate-response
+{
+  "subject": "Не работает VPN",
+  "body": "При подключении ошибка 789",
+  "language": "ru"
+}
+
+# Vector search KB
+POST /api/v1/nlp/search-kb
+{
+  "query": "как сбросить пароль vpn",
+  "language": "ru",
+  "limit": 5
+}
+
+# Full NLP pipeline (test)
+POST /api/v1/nlp/process
+{
+  "subject": "Проблема с почтой",
+  "body": "Не приходят письма"
+}
+
+# Translate text
+POST /api/v1/nlp/translate
+{
+  "text": "Здравствуйте, как я могу вам помочь?",
+  "target_language": "kz"
+}
+
+# Index KB articles
+POST /api/v1/nlp/index-kb-all
+
+# NLP health check
+GET /api/v1/nlp/health
+```
+
 ### Админка
 
 ```bash
@@ -212,14 +259,48 @@ helpdesk-ai/
 - Health check: `GET /health`
 - Logs: `./logs/` или stdout в Docker
 
+## NLP Pipeline
+
+Система использует LLM (Claude/OpenAI) для:
+
+1. **Классификация тикетов** — определение категории и уверенности
+2. **Приоритизация** — оценка срочности, детекция ключевых слов эскалации
+3. **Triage** — решение об авто-ответе или маршрутизации оператору
+4. **RAG Response Generation** — генерация ответа на основе базы знаний
+5. **Перевод** — RU ↔ KZ перевод
+6. **Детекция языка** — автоматическое определение языка
+
+### Пороги принятия решений
+
+| Параметр | Значение | Действие |
+|----------|----------|----------|
+| confidence ≥ 0.90 | Auto-resolve | Черновик с высоким приоритетом |
+| 0.65 ≤ confidence < 0.90 | Draft | Черновик для проверки |
+| confidence < 0.65 | Manual | Маршрутизация оператору |
+| Escalation keywords | Immediate | Эскалация |
+
+### Vector DB (Qdrant)
+
+KB статьи индексируются в Qdrant для семантического поиска:
+
+```bash
+# Индексировать все статьи
+npm run kb:index
+
+# Проверить статистику
+npm run kb:stats
+```
+
 ## TODO
 
-- [ ] Полная интеграция с Anthropic/OpenAI API
-- [ ] Vector embeddings для KB
+- [x] Полная интеграция с Anthropic/OpenAI API
+- [x] Vector embeddings для KB (Qdrant)
+- [x] RAG pipeline
 - [ ] Telegram mini-app для исполнителей
 - [ ] ITSM интеграция
 - [ ] Viber/Teams коннекторы
 - [ ] React frontend (Admin Dashboard, Operator Console)
+- [ ] Fine-tuning классификатора на исторических данных
 
 ## Лицензия
 
