@@ -435,8 +435,13 @@ export class EmailConnector extends BaseConnector {
    * Send email message
    */
   async sendMessage(recipientEmail, message, options = {}) {
+    // Lazy initialize SMTP if needed
     if (!this.smtpTransport) {
-      throw new Error('SMTP transport not initialized');
+      this.initSmtpTransport();
+    }
+
+    if (!this.smtpTransport) {
+      throw new Error('SMTP not configured');
     }
 
     const {

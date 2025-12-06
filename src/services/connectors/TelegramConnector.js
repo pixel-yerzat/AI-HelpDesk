@@ -313,6 +313,17 @@ export class TelegramConnector extends BaseConnector {
    * Send message to user
    */
   async sendMessage(chatId, message, options = {}) {
+    // Lazy initialize bot for sending if not started
+    if (!this.bot && config.telegram.botToken) {
+      this.bot = new TelegramBot(config.telegram.botToken, { polling: false });
+      this.logger.info('Telegram bot initialized for sending only');
+    }
+
+    if (!this.bot) {
+      this.logger.error('Telegram bot not initialized');
+      throw new Error('Telegram bot not configured');
+    }
+
     const {
       parseMode = 'HTML',
       replyMarkup = null,

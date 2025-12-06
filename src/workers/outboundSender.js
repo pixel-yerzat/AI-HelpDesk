@@ -59,13 +59,10 @@ async function startWorker() {
     // Connect to Redis
     await connectRedis();
 
-    // Start connectors (for sending only, not receiving)
-    // In production, you might want separate processes for receiving
-    await connectorManager.startAll({
-      telegram: true,
-      email: true,
-      telegramMode: 'polling', // or 'webhook' in production
-    });
+    // Initialize connectors for SENDING ONLY
+    // Connectors are initialized but NOT started (no polling/webhook)
+    // telegramBot.js and whatsappBot.js handle incoming messages
+    await connectorManager.initializeForSending();
 
     // Create consumer groups
     await streams.createConsumerGroup(STREAM_KEY, CONSUMER_GROUP);

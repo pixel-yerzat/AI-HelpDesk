@@ -14,6 +14,7 @@ class ConnectorManager {
   constructor() {
     this.connectors = new Map();
     this.isRunning = false;
+    this.sendOnly = false;
     this.logger = logger.child({ service: 'ConnectorManager' });
   }
 
@@ -23,27 +24,56 @@ class ConnectorManager {
   registerConnector(name, connector) {
     this.connectors.set(name, connector);
     
-    // Set up message handler
-    connector.on('message', async (messageData) => {
-      await this.handleIncomingMessage(messageData);
-    });
+    // Only set up message handlers if not in send-only mode
+    if (!this.sendOnly) {
+      // Set up message handler
+      connector.on('message', async (messageData) => {
+        await this.handleIncomingMessage(messageData);
+      });
 
-    // Set up feedback handler
-    connector.on('feedback', async (feedbackData) => {
-      await this.handleFeedback(feedbackData);
-    });
+      // Set up feedback handler
+      connector.on('feedback', async (feedbackData) => {
+        await this.handleFeedback(feedbackData);
+      });
 
-    // Set up confirmation handler
-    connector.on('confirmation', async (confirmationData) => {
-      await this.handleConfirmation(confirmationData);
-    });
+      // Set up confirmation handler
+      connector.on('confirmation', async (confirmationData) => {
+        await this.handleConfirmation(confirmationData);
+      });
 
-    // Set up status request handler
-    connector.on('status_request', async (requestData) => {
-      await this.handleStatusRequest(requestData);
-    });
+      // Set up status request handler
+      connector.on('status_request', async (requestData) => {
+        await this.handleStatusRequest(requestData);
+      });
+    }
 
-    this.logger.info('Connector registered', { name });
+    this.logger.info('Connector registered', { name, sendOnly: this.sendOnly });
+  }
+
+  /**
+   * Initialize connectors for SENDING ONLY (no polling/webhook)
+   * Used by outboundSender worker
+   */
+  async initializeForSending() {
+    this.sendOnly = true;
+    this.logger.info('Initializing connectors for sending only...');
+
+    // Register Telegram (singleton, no start)
+    const telegramConnector = getTelegramConnector();
+    this.registerConnector('telegram', telegramConnector);
+
+    // Register Email (singleton, no start)
+    const emailConnector = getEmailConnector();
+    this.registerConnector('email', emailConnector);
+
+    // Register WhatsApp (singleton, no start)
+    const whatsappConnector = getWhatsAppConnector();
+    this.registerConnector('whatsapp', whatsappConnector);
+
+    this.isRunning = true;
+    this.logger.info('Connectors initialized for sending', {
+      connectors: Array.from(this.connectors.keys()),
+    });
   }
 
   /**

@@ -300,12 +300,32 @@ export class WhatsAppConnector extends BaseConnector {
     }
 
     const chatId = msg.from;
-    const contact = await msg.getContact();
-    const chat = await msg.getChat();
-
-    // Extract sender info
+    
+    // Get contact info with fallback (handles WhatsApp API changes)
+    let contact = null;
+    let senderName = '';
     const senderNumber = chatId.replace('@c.us', '');
-    const senderName = contact.pushname || contact.name || senderNumber;
+    
+    try {
+      contact = await msg.getContact();
+      senderName = contact?.pushname || contact?.name || senderNumber;
+    } catch (error) {
+      // WhatsApp API changed - getContact() may fail
+      // Fall back to using phone number as name
+      this.logger.warn('Failed to get contact info, using fallback', { 
+        error: error.message,
+        chatId,
+      });
+      senderName = senderNumber;
+    }
+
+    // Get chat info (optional, don't fail if unavailable)
+    let chat = null;
+    try {
+      chat = await msg.getChat();
+    } catch (error) {
+      this.logger.debug('Failed to get chat info', { error: error.message });
+    }
 
     // Extract message content
     let body = msg.body || '';
