@@ -96,6 +96,39 @@ async function processTicket(ticketId, isNew) {
       priority: nlpResults.priority.priority,
     });
 
+    // If auto-resolved with high confidence, send response immediately
+    // This implements the "auto-resolve" feature when confidence is very high
+    if (
+      newStatus === 'draft_pending' &&
+      topPrediction.confidence >= 0.95 && // Very high confidence
+      config.features?.autoSendHighConfidence &&
+      nlpResults.response?.answer
+    ) {
+      // Queue message for sending
+      await streams.addToStream('outbound_messages', {
+        ticketId,
+        source: ticket.source,
+        sourceId: ticket.source_id,
+        message: nlpResults.response.answer,
+        type: 'auto_response',
+      });
+      
+      // Update status to waiting_user
+      await Ticket.updateTicket(ticketId, {
+        status: 'waiting_user',
+        resolved_by: 'auto',
+      });
+      
+      // Add message to ticket
+      await Ticket.addTicketMessage(ticketId, {
+        sender: 'system',
+        senderType: 'bot',
+        content: nlpResults.response.answer,
+      });
+      
+      logger.info('Auto-response sent', { ticketId, confidence: topPrediction.confidence });
+    }
+
     // Log audit
     logAudit(ticketId, 'system', 'nlp_processed', {
       category: topPrediction.category,

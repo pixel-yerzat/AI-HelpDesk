@@ -38,6 +38,8 @@ export const auth = {
   register: (data) => api.post('/auth/register', data),
   me: () => api.get('/auth/me'),
   updateProfile: (data) => api.put('/auth/me', data),
+  changePassword: (oldPassword, newPassword) => 
+    api.put('/auth/password', { oldPassword, newPassword }),
 };
 
 // Tickets
@@ -48,6 +50,7 @@ export const tickets = {
   action: (id, action, data = {}) => api.post(`/tickets/${id}/action`, { action, ...data }),
   getMessages: (id) => api.get(`/tickets/${id}/messages`),
   addMessage: (id, content) => api.post(`/tickets/${id}/messages`, { content }),
+  assign: (id, assignedTo) => api.post(`/tickets/${id}/action`, { action: 'assign', assigned_to: assignedTo }),
 };
 
 // Knowledge Base
@@ -65,11 +68,17 @@ export const kb = {
 export const admin = {
   getStats: (params) => api.get('/admin/stats', { params }),
   getDailyStats: (days = 30) => api.get('/admin/stats/daily', { params: { days } }),
-  getCategoryStats: () => api.get('/admin/stats/categories'),
+  getCategoryStats: (days = 30) => api.get('/admin/stats/categories', { params: { days } }),
   getConfidenceStats: () => api.get('/admin/stats/confidence'),
-  getUsers: () => api.get('/admin/users'),
+  
+  // Users
+  getUsers: (params) => api.get('/admin/users', { params }),
   getOperators: () => api.get('/admin/operators'),
   updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
+  createUser: (data) => api.post('/auth/register', data),
+  deleteUser: (id) => api.delete(`/admin/users/${id}`),
+  
+  // Health & Config
   healthCheck: () => api.get('/admin/health'),
   getConfig: () => api.get('/admin/config'),
   updateThresholds: (data) => api.put('/admin/config/thresholds', data),
@@ -88,7 +97,7 @@ export const nlp = {
 // Connectors
 export const connectors = {
   status: () => api.get('/connectors/status'),
-  getStatus: (name) => api.get(`/connectors/status/${name}`),
+  getStatus: (name) => api.get(`/connectors/status/${name}`).catch(() => ({ data: { status: 'not_configured' } })),
   getConfig: () => api.get('/connectors/config'),
   testSend: (connector, recipient, message) => 
     api.post('/connectors/test-send', { connector, recipient, message }),
@@ -102,6 +111,13 @@ export const whatsapp = {
   disconnect: (logout = false) => api.post('/whatsapp/disconnect', { logout }),
   testSend: (phoneNumber, message) => api.post('/whatsapp/test-send', { phoneNumber, message }),
   checkNumber: (phoneNumber) => api.post('/whatsapp/check-number', { phoneNumber }),
+};
+
+// Notifications
+export const notifications = {
+  getUnread: () => api.get('/notifications/unread').catch(() => ({ data: { notifications: [], count: 0 } })),
+  markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
 };
 
 export default api;

@@ -14,6 +14,9 @@ import TicketDetailPage from './pages/TicketDetailPage';
 import DraftsPage from './pages/DraftsPage';
 import KnowledgeBasePage from './pages/KnowledgeBasePage';
 import ChannelsPage from './pages/ChannelsPage';
+import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }) {
@@ -81,32 +84,14 @@ export default function App() {
       <Route path="/drafts" element={<ProtectedRoute><DraftsPage /></ProtectedRoute>} />
       <Route path="/knowledge-base" element={<ProtectedRoute><KnowledgeBasePage /></ProtectedRoute>} />
       <Route path="/channels" element={<ProtectedRoute><ChannelsPage /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
       {/* Admin routes */}
-      <Route path="/users" element={<AdminRoute><UsersPlaceholder /></AdminRoute>} />
-      <Route path="/settings" element={<AdminRoute><SettingsPlaceholder /></AdminRoute>} />
+      <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+      <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
 
-      {/* 404 */}
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  );
-}
-
-// Placeholder components
-function UsersPlaceholder() {
-  return (
-    <div className="card p-12 text-center">
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">Управление пользователями</h2>
-      <p className="text-gray-500">Раздел в разработке</p>
-    </div>
-  );
-}
-
-function SettingsPlaceholder() {
-  return (
-    <div className="card p-12 text-center">
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">Настройки системы</h2>
-      <p className="text-gray-500">Раздел в разработке</p>
-    </div>
   );
 }
