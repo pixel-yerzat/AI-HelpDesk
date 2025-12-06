@@ -11,6 +11,7 @@ import { errorHandler, notFoundHandler } from './api/middleware/errorHandler.js'
 import logger from './utils/logger.js';
 import db from './utils/database.js';
 import { connect as connectRedis, streams } from './utils/redis.js';
+import connectorManager from './services/connectors/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -104,6 +105,15 @@ const startServer = async () => {
       logger.info('Redis connection established');
     } catch (error) {
       logger.warn('Redis connection failed, some features may be unavailable', { error: error.message });
+    }
+
+    // Initialize connectors for status checks (not for receiving messages)
+    // Messages are received by separate worker processes
+    try {
+      await connectorManager.initializeForSending();
+      logger.info('Connectors initialized for API');
+    } catch (error) {
+      logger.warn('Failed to initialize connectors', { error: error.message });
     }
 
     // Start HTTP server

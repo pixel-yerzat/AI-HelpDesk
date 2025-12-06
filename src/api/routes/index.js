@@ -7,6 +7,7 @@ import adminRouter from './admin.js';
 import nlpRouter from './nlp.js';
 import connectorsRouter from './connectors.js';
 import whatsappRouter from './whatsapp.js';
+import notificationsRouter from './notifications.js';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/admin', adminRouter);
 router.use('/nlp', nlpRouter);
 router.use('/connectors', connectorsRouter);
 router.use('/whatsapp', whatsappRouter);
+router.use('/notifications', notificationsRouter);
 
 // Root endpoint
 router.get('/', (req, res) => {

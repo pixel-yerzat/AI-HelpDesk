@@ -85,27 +85,28 @@ router.get('/:id',
 router.post('/',
   authenticate,
   requireRole('admin', 'operator'),
-  kbArticleValidator,
   asyncHandler(async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      throw ApiError.badRequest('Validation failed', formatValidationErrors(errors));
+    const { title_ru, title_kz, content_ru, content_kz, category, type, keywords } = req.body;
+
+    if (!title_ru || !content_ru) {
+      throw ApiError.badRequest('title_ru and content_ru are required');
     }
 
-    const { title, body, language, category, tags } = req.body;
-
     const article = await KnowledgeBase.createArticle({
-      title,
-      body,
-      language,
+      title: title_ru, // For backward compatibility
+      body: content_ru,
+      title_ru,
+      title_kz,
+      content_ru,
+      content_kz,
+      language: 'ru',
       category,
-      tags,
+      type: type || 'faq',
+      keywords: keywords || [],
       ownerId: req.user.id,
     });
 
     logger.info('KB article created', { articleId: article.id, userId: req.user.id });
-
-    // TODO: Queue for embedding generation
 
     res.status(201).json({ 
       success: true,
@@ -118,26 +119,24 @@ router.post('/',
 router.put('/:id',
   authenticate,
   requireRole('admin', 'operator'),
-  kbArticleValidator,
   asyncHandler(async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      throw ApiError.badRequest('Validation failed', formatValidationErrors(errors));
-    }
-
     const existing = await KnowledgeBase.getArticleById(req.params.id);
     if (!existing) {
       throw ApiError.notFound('Article not found');
     }
 
-    const { title, body, language, category, tags } = req.body;
+    const { title_ru, title_kz, content_ru, content_kz, category, type, keywords } = req.body;
 
     const article = await KnowledgeBase.updateArticle(req.params.id, {
-      title,
-      body,
-      language,
+      title: title_ru,
+      body: content_ru,
+      title_ru,
+      title_kz,
+      content_ru,
+      content_kz,
       category,
-      tags,
+      type,
+      keywords,
       vector_id: null, // Reset vector on update - will be regenerated
     });
 

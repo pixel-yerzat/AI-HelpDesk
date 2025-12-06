@@ -3,46 +3,185 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Send, 
-  Check, 
-  X, 
-  AlertTriangle,
-  User,
-  Bot,
+  User, 
+  Bot, 
+  Headphones,
   Clock,
+  Tag,
+  Globe,
   MessageSquare,
-  FileText,
-  Loader2,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
   ChevronDown,
+  Loader2,
+  FileText,
   UserPlus,
-  RefreshCw,
 } from 'lucide-react';
 import { tickets as ticketsApi, admin } from '../api';
-import { useAuthStore } from '../stores';
-import { 
-  formatDateTime, 
-  formatRelativeTime,
-  getStatusBadgeClass, 
-  getPriorityBadgeClass,
-  STATUS_CONFIG,
-  PRIORITY_CONFIG,
-  SOURCE_CONFIG,
-  CATEGORY_CONFIG,
-  cn,
-} from '../utils';
+import { formatDateTime, formatRelativeTime, cn, STATUS_CONFIG, PRIORITY_CONFIG, SOURCE_CONFIG, CATEGORY_CONFIG } from '../utils';
 import toast from 'react-hot-toast';
+
+function MessageBubble({ message, isLast }) {
+  const isUser = message.sender_type === 'user';
+  const isBot = message.sender_type === 'bot';
+  const isOperator = message.sender_type === 'operator';
+
+  const Icon = isUser ? User : isBot ? Bot : Headphones;
+  const bgColor = isUser ? 'bg-gray-100' : isBot ? 'bg-blue-50' : 'bg-green-50';
+  const borderColor = isUser ? 'border-gray-200' : isBot ? 'border-blue-200' : 'border-green-200';
+
+  return (
+    <div className={cn("flex gap-3", isUser ? "" : "flex-row-reverse")}>
+      <div className={cn(
+        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+        isUser ? 'bg-gray-200' : isBot ? 'bg-blue-200' : 'bg-green-200'
+      )}>
+        <Icon className={cn(
+          "w-4 h-4",
+          isUser ? 'text-gray-600' : isBot ? 'text-blue-600' : 'text-green-600'
+        )} />
+      </div>
+      <div className={cn(
+        "flex-1 max-w-[80%] p-3 rounded-lg border",
+        bgColor, borderColor,
+        isUser ? "" : "ml-auto"
+      )}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-gray-600">
+            {isUser ? 'Пользователь' : isBot ? 'AI Bot' : 'Оператор'}
+          </span>
+          <span className="text-xs text-gray-400">
+            {formatRelativeTime(message.created_at)}
+          </span>
+        </div>
+        <p className="text-sm text-gray-800 whitespace-pre-wrap">{message.content}</p>
+      </div>
+    </div>
+  );
+}
+
+function DraftBanner({ ticket, onApprove, onReject, isLoading }) {
+  if (ticket.status !== 'draft_pending' || !ticket.suggested_response) return null;
+
+  return (
+    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center">
+          <Bot className="w-5 h-5 text-yellow-600 mr-2" />
+          <span className="font-medium text-yellow-800">AI-предложенный ответ</span>
+          {ticket.category_conf && (
+            <span className="ml-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded">
+              Уверенность: {Math.round(ticket.category_conf * 100)}%
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="bg-white rounded p-3 mb-3 border border-yellow-100">
+        <p className="text-sm text-gray-700 whitespace-pre-wrap">{ticket.suggested_response}</p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onApprove}
+          disabled={isLoading}
+          className="btn btn-success flex-1"
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-1" />}
+          Одобрить и отправить
+        </button>
+        <button
+          onClick={onReject}
+          disabled={isLoading}
+          className="btn btn-danger flex-1"
+        >
+          <XCircle className="w-4 h-4 mr-1" />
+          Отклонить
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AssignDropdown({ ticketId, currentAssignee, operators, onAssign }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleAssign = async (operatorId) => {
+    setIsLoading(true);
+    try {
+      await ticketsApi.assign(ticketId, operatorId);
+      toast.success('Тикет назначен');
+      onAssign();
+    } catch (error) {
+      toast.error('Не удалось назначить');
+    } finally {
+      setIsLoading(false);
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="btn btn-secondary w-full justify-between"
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <>
+            <span className="flex items-center">
+              <UserPlus className="w-4 h-4 mr-2" />
+              {currentAssignee ? 'Переназначить' : 'Назначить'}
+            </span>
+            <ChevronDown className="w-4 h-4" />
+          </>
+        )}
+      </button>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+          {operators.length === 0 ? (
+            <div className="p-3 text-sm text-gray-500">Нет доступных операторов</div>
+          ) : (
+            operators.map(op => (
+              <button
+                key={op.id}
+                onClick={() => handleAssign(op.id)}
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center",
+                  currentAssignee === op.id && 'bg-primary-50'
+                )}
+              >
+                <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center mr-2">
+                  <span className="text-xs font-medium text-primary-700">
+                    {op.name?.charAt(0) || 'O'}
+                  </span>
+                </div>
+                <span>{op.name}</span>
+                {currentAssignee === op.id && (
+                  <CheckCircle className="w-4 h-4 text-primary-600 ml-auto" />
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TicketDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  
   const [ticket, setTicket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [operators, setOperators] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [newMessage, setNewMessage] = useState('');
-  const [showActions, setShowActions] = useState(false);
 
   useEffect(() => {
     loadTicket();
@@ -52,14 +191,10 @@ export default function TicketDetailPage() {
   const loadTicket = async () => {
     setIsLoading(true);
     try {
-      const [ticketRes, messagesRes] = await Promise.all([
-        ticketsApi.get(id),
-        ticketsApi.getMessages(id),
-      ]);
-      setTicket(ticketRes.data.ticket);
-      setMessages(messagesRes.data.messages || []);
+      const { data } = await ticketsApi.get(id);
+      setTicket(data.ticket);
+      setMessages(data.ticket?.messages || []);
     } catch (error) {
-      console.error('Failed to load ticket', error);
       toast.error('Не удалось загрузить тикет');
       navigate('/tickets');
     } finally {
@@ -72,31 +207,40 @@ export default function TicketDetailPage() {
       const { data } = await admin.getOperators();
       setOperators(data.operators || []);
     } catch (error) {
-      // Ignore - might not have permission
+      console.error('Failed to load operators', error);
     }
   };
 
   const handleAction = async (action, data = {}) => {
+    setIsActionLoading(true);
     try {
       await ticketsApi.action(id, action, data);
-      toast.success('Действие выполнено');
+      toast.success(
+        action === 'approve' ? 'Ответ одобрен и отправлен' :
+        action === 'reject' ? 'Ответ отклонён' :
+        action === 'escalate' ? 'Тикет эскалирован' :
+        action === 'close' ? 'Тикет закрыт' :
+        action === 'reopen' ? 'Тикет переоткрыт' :
+        'Действие выполнено'
+      );
       loadTicket();
-      setShowActions(false);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Ошибка');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const handleSendMessage = async (e) => {
+  const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!replyText.trim()) return;
 
     setIsSending(true);
     try {
-      await ticketsApi.addMessage(id, newMessage);
-      setNewMessage('');
-      loadTicket();
+      await ticketsApi.addMessage(id, replyText.trim());
+      setReplyText('');
       toast.success('Сообщение отправлено');
+      loadTicket();
     } catch (error) {
       toast.error('Не удалось отправить сообщение');
     } finally {
@@ -116,103 +260,68 @@ export default function TicketDetailPage() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Тикет не найден</p>
-        <Link to="/tickets" className="btn btn-primary mt-4">
-          Назад к списку
-        </Link>
+        <Link to="/tickets" className="btn btn-primary mt-4">К списку тикетов</Link>
       </div>
     );
   }
 
+  const statusConfig = STATUS_CONFIG[ticket.status] || {};
+  const priorityConfig = PRIORITY_CONFIG[ticket.priority] || {};
   const sourceConfig = SOURCE_CONFIG[ticket.source] || {};
   const categoryConfig = CATEGORY_CONFIG[ticket.category] || {};
-  const isDraft = ticket.status === 'draft_pending';
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
-          <button 
-            onClick={() => navigate(-1)}
-            className="mr-4 p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ArrowLeft className="w-5 h-5" />
+          <button onClick={() => navigate('/tickets')} className="mr-4 p-2 hover:bg-gray-100 rounded-lg">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">
-                Тикет #{id.substring(0, 8)}
+                Тикет #{ticket.id.substring(0, 8)}
               </h1>
-              <span className={cn("badge", getStatusBadgeClass(ticket.status))}>
-                {STATUS_CONFIG[ticket.status]?.label || ticket.status}
+              <span className={cn("badge", statusConfig.bgClass)}>
+                {statusConfig.label || ticket.status}
               </span>
             </div>
             <p className="text-sm text-gray-500 mt-1">
-              Создан {formatRelativeTime(ticket.created_at)}
+              Создан {formatDateTime(ticket.created_at)}
             </p>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="relative">
-          <button 
-            onClick={() => setShowActions(!showActions)}
-            className="btn btn-secondary flex items-center"
-          >
-            Действия
-            <ChevronDown className="w-4 h-4 ml-2" />
-          </button>
-          
-          {showActions && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-              {isDraft && (
-                <>
-                  <button
-                    onClick={() => handleAction('approve')}
-                    className="w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-green-50 flex items-center"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Одобрить и отправить
-                  </button>
-                  <button
-                    onClick={() => handleAction('reject')}
-                    className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center"
-                  >
-                    <X className="w-4 h-4 mr-2" />
-                    Отклонить черновик
-                  </button>
-                </>
-              )}
-              
-              {ticket.status !== 'resolved' && ticket.status !== 'closed' && (
-                <>
-                  <button
-                    onClick={() => handleAction('escalate')}
-                    className="w-full text-left px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 flex items-center"
-                  >
-                    <AlertTriangle className="w-4 h-4 mr-2" />
-                    Эскалировать
-                  </button>
-                  <button
-                    onClick={() => handleAction('close')}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Закрыть
-                  </button>
-                </>
-              )}
-
-              {(ticket.status === 'resolved' || ticket.status === 'closed') && (
-                <button
-                  onClick={() => handleAction('reopen')}
-                  className="w-full text-left px-4 py-2 text-sm text-primary-700 hover:bg-primary-50 flex items-center"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Переоткрыть
-                </button>
-              )}
-            </div>
+        <div className="flex gap-2">
+          {ticket.status !== 'closed' && ticket.status !== 'resolved' && (
+            <>
+              <button
+                onClick={() => handleAction('escalate')}
+                disabled={isActionLoading}
+                className="btn btn-secondary"
+              >
+                <AlertTriangle className="w-4 h-4 mr-1" />
+                Эскалировать
+              </button>
+              <button
+                onClick={() => handleAction('close')}
+                disabled={isActionLoading}
+                className="btn btn-secondary"
+              >
+                Закрыть
+              </button>
+            </>
+          )}
+          {(ticket.status === 'closed' || ticket.status === 'resolved') && (
+            <button
+              onClick={() => handleAction('reopen')}
+              disabled={isActionLoading}
+              className="btn btn-primary"
+            >
+              Переоткрыть
+            </button>
           )}
         </div>
       </div>
@@ -221,233 +330,159 @@ export default function TicketDetailPage() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Draft Banner */}
-          {isDraft && ticket.nlp?.suggested_response && (
-            <div className="card bg-yellow-50 border-yellow-200 p-4">
-              <div className="flex items-start">
-                <Bot className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
-                <div className="flex-1">
-                  <h4 className="font-medium text-yellow-800">Предложенный ответ AI</h4>
-                  <p className="text-sm text-yellow-700 mt-2 whitespace-pre-wrap">
-                    {ticket.nlp.suggested_response}
-                  </p>
-                  <div className="flex items-center gap-3 mt-4">
-                    <button
-                      onClick={() => handleAction('approve')}
-                      className="btn btn-success text-sm"
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Одобрить
-                    </button>
-                    <button
-                      onClick={() => handleAction('reject')}
-                      className="btn btn-secondary text-sm"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Отклонить
-                    </button>
-                    <span className="text-xs text-yellow-600">
-                      Уверенность: {Math.round((ticket.nlp.category_conf || 0) * 100)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <DraftBanner 
+            ticket={ticket}
+            onApprove={() => handleAction('approve')}
+            onReject={() => handleAction('reject')}
+            isLoading={isActionLoading}
+          />
 
           {/* Original Message */}
           <div className="card p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">
-              {ticket.subject || 'Без темы'}
-            </h3>
+            <h3 className="font-semibold text-gray-900 mb-3">{ticket.subject || 'Без темы'}</h3>
             <p className="text-gray-700 whitespace-pre-wrap">{ticket.body}</p>
           </div>
 
           {/* Messages */}
-          <div className="card">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">
-                История переписки ({messages.length})
+          {messages.length > 0 && (
+            <div className="card p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">
+                <MessageSquare className="w-5 h-5 inline mr-2" />
+                Переписка ({messages.length})
               </h3>
+              <div className="space-y-4">
+                {messages.map((msg, i) => (
+                  <MessageBubble key={i} message={msg} isLast={i === messages.length - 1} />
+                ))}
+              </div>
             </div>
-            
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-              {messages.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">
-                  Нет сообщений
-                </div>
-              ) : (
-                messages.map((msg, idx) => (
-                  <div key={idx} className="p-4 hover:bg-gray-50">
-                    <div className="flex items-start">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                        msg.sender_type === 'user' ? 'bg-primary-100' :
-                        msg.sender_type === 'bot' ? 'bg-purple-100' :
-                        'bg-green-100'
-                      )}>
-                        {msg.sender_type === 'user' ? (
-                          <User className="w-4 h-4 text-primary-600" />
-                        ) : msg.sender_type === 'bot' ? (
-                          <Bot className="w-4 h-4 text-purple-600" />
-                        ) : (
-                          <User className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            {msg.sender_type === 'user' ? 'Пользователь' :
-                             msg.sender_type === 'bot' ? 'AI Bot' : 'Оператор'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatRelativeTime(msg.created_at)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
-                          {msg.content}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+          )}
 
-            {/* Reply form */}
-            {ticket.status !== 'closed' && (
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-100">
-                <div className="flex gap-3">
-                  <textarea
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Написать ответ..."
-                    rows={2}
-                    className="input flex-1 resize-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSending || !newMessage.trim()}
-                    className="btn btn-primary self-end"
+          {/* Reply Form */}
+          {ticket.status !== 'closed' && ticket.status !== 'resolved' && (
+            <div className="card p-6">
+              <h3 className="font-semibold text-gray-900 mb-3">Ответить</h3>
+              <form onSubmit={handleSendReply}>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Введите сообщение..."
+                  className="input min-h-[100px] mb-3"
+                  required
+                />
+                <div className="flex justify-end">
+                  <button 
+                    type="submit" 
+                    disabled={isSending || !replyText.trim()}
+                    className="btn btn-primary"
                   >
                     {isSending ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
                     ) : (
-                      <Send className="w-5 h-5" />
+                      <Send className="w-4 h-4 mr-2" />
                     )}
+                    Отправить
                   </button>
                 </div>
               </form>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Info Card */}
+          {/* Info */}
           <div className="card p-6">
             <h3 className="font-semibold text-gray-900 mb-4">Информация</h3>
-            <dl className="space-y-4">
-              <div>
-                <dt className="text-xs text-gray-500 uppercase">Источник</dt>
-                <dd className="flex items-center mt-1">
-                  <MessageSquare 
-                    className="w-4 h-4 mr-2" 
-                    style={{ color: sourceConfig.color }}
-                  />
-                  <span className="text-sm font-medium">{sourceConfig.label || ticket.source}</span>
-                </dd>
+            <div className="space-y-3">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Источник</span>
+                <span className="font-medium flex items-center">
+                  {sourceConfig.icon && <sourceConfig.icon className="w-4 h-4 mr-1" />}
+                  {sourceConfig.label || ticket.source}
+                </span>
               </div>
-
-              <div>
-                <dt className="text-xs text-gray-500 uppercase">Приоритет</dt>
-                <dd className="mt-1">
-                  <span className={cn("badge", getPriorityBadgeClass(ticket.priority))}>
-                    {PRIORITY_CONFIG[ticket.priority]?.label || ticket.priority || '-'}
-                  </span>
-                </dd>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Приоритет</span>
+                <span className={cn("badge", priorityConfig.bgClass)}>
+                  {priorityConfig.label || ticket.priority || 'Не определён'}
+                </span>
               </div>
-
-              <div>
-                <dt className="text-xs text-gray-500 uppercase">Категория</dt>
-                <dd className="text-sm font-medium mt-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Категория</span>
+                <span className="font-medium text-sm">
                   {categoryConfig.label || ticket.category || '-'}
-                </dd>
+                </span>
               </div>
-
-              <div>
-                <dt className="text-xs text-gray-500 uppercase">Язык</dt>
-                <dd className="text-sm font-medium mt-1">
-                  {ticket.language === 'ru' ? 'Русский' : 
-                   ticket.language === 'kz' ? 'Казахский' : 
+              <div className="flex justify-between">
+                <span className="text-gray-500">Язык</span>
+                <span className="font-medium">
+                  {ticket.language === 'ru' ? '🇷🇺 Русский' : 
+                   ticket.language === 'kz' ? '🇰🇿 Казахский' : 
                    ticket.language || '-'}
-                </dd>
+                </span>
               </div>
-
-              <div>
-                <dt className="text-xs text-gray-500 uppercase">Создан</dt>
-                <dd className="text-sm mt-1">{formatDateTime(ticket.created_at)}</dd>
-              </div>
-
-              {ticket.resolved_at && (
-                <div>
-                  <dt className="text-xs text-gray-500 uppercase">Решён</dt>
-                  <dd className="text-sm mt-1">{formatDateTime(ticket.resolved_at)}</dd>
-                </div>
-              )}
-            </dl>
+            </div>
           </div>
 
           {/* NLP Info */}
-          {ticket.nlp && (
+          {(ticket.category_conf || ticket.summary) && (
             <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">AI Анализ</h3>
-              <dl className="space-y-3">
-                <div className="flex justify-between">
-                  <dt className="text-sm text-gray-500">Категория</dt>
-                  <dd className="text-sm font-medium">
-                    {ticket.nlp.category} ({Math.round((ticket.nlp.category_conf || 0) * 100)}%)
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-sm text-gray-500">Приоритет</dt>
-                  <dd className="text-sm font-medium">
-                    {ticket.nlp.priority} ({Math.round((ticket.nlp.priority_conf || 0) * 100)}%)
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-sm text-gray-500">Триаж</dt>
-                  <dd className="text-sm font-medium">
-                    {ticket.nlp.triage === 'auto_resolvable' ? 'Авто' : 'Ручной'}
-                  </dd>
-                </div>
-                {ticket.nlp.summary && (
+              <h3 className="font-semibold text-gray-900 mb-4">
+                <Bot className="w-5 h-5 inline mr-2" />
+                AI Анализ
+              </h3>
+              <div className="space-y-3 text-sm">
+                {ticket.category_conf && (
                   <div>
-                    <dt className="text-sm text-gray-500 mb-1">Резюме</dt>
-                    <dd className="text-sm bg-gray-50 p-2 rounded">
-                      {ticket.nlp.summary}
-                    </dd>
+                    <span className="text-gray-500">Уверенность категории</span>
+                    <div className="mt-1 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-primary-500 h-2 rounded-full"
+                        style={{ width: `${ticket.category_conf * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500">{Math.round(ticket.category_conf * 100)}%</span>
                   </div>
                 )}
-              </dl>
+                {ticket.summary && (
+                  <div>
+                    <span className="text-gray-500">Краткое содержание</span>
+                    <p className="mt-1 text-gray-700">{ticket.summary}</p>
+                  </div>
+                )}
+                {ticket.triage && (
+                  <div>
+                    <span className="text-gray-500">Триаж</span>
+                    <p className="mt-1 font-medium">{ticket.triage}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Assign */}
-          {operators.length > 0 && ticket.status !== 'closed' && (
-            <div className="card p-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Назначить</h3>
-              <select
-                value={ticket.assigned_to || ''}
-                onChange={(e) => handleAction('assign', { assignedTo: e.target.value || null })}
-                className="input"
-              >
-                <option value="">Не назначен</option>
-                {operators.map(op => (
-                  <option key={op.id} value={op.id}>{op.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+          {/* Assignment */}
+          <div className="card p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Назначение</h3>
+            {ticket.assigned_to ? (
+              <div className="flex items-center mb-3">
+                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center mr-2">
+                  <User className="w-4 h-4 text-primary-600" />
+                </div>
+                <span className="text-sm">
+                  {operators.find(o => o.id === ticket.assigned_to)?.name || 'Назначен'}
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-3">Не назначен</p>
+            )}
+            <AssignDropdown 
+              ticketId={ticket.id}
+              currentAssignee={ticket.assigned_to}
+              operators={operators}
+              onAssign={loadTicket}
+            />
+          </div>
         </div>
       </div>
     </div>

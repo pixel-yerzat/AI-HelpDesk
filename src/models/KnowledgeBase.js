@@ -6,9 +6,15 @@ export const createArticle = async (articleData) => {
   const {
     title,
     body,
+    title_ru,
+    title_kz,
+    content_ru,
+    content_kz,
     tags = [],
+    keywords = [],
     language = 'ru',
     category,
+    type = 'faq',
     ownerId,
     vectorId = null,
   } = articleData;
@@ -16,10 +22,10 @@ export const createArticle = async (articleData) => {
   const id = uuidv4();
 
   const result = await db.query(
-    `INSERT INTO kb_articles (id, title, body, tags, language, category, owner_id, vector_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+    `INSERT INTO kb_articles (id, title, body, title_ru, title_kz, content_ru, content_kz, tags, keywords, language, category, type, owner_id, vector_id, is_published, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, NOW(), NOW())
      RETURNING *`,
-    [id, title, body, JSON.stringify(tags), language, category, ownerId, vectorId]
+    [id, title || title_ru, body || content_ru, title_ru, title_kz, content_ru, content_kz, JSON.stringify(tags), keywords, language, category, type, ownerId, vectorId]
   );
 
   return result.rows[0];
@@ -35,13 +41,13 @@ export const getArticleById = async (id) => {
 
 // Update article
 export const updateArticle = async (id, updates) => {
-  const allowedFields = ['title', 'body', 'tags', 'language', 'category', 'vector_id'];
+  const allowedFields = ['title', 'body', 'title_ru', 'title_kz', 'content_ru', 'content_kz', 'tags', 'keywords', 'language', 'category', 'type', 'vector_id', 'is_published'];
   const setClause = [];
   const values = [];
   let paramIndex = 1;
 
   for (const [key, value] of Object.entries(updates)) {
-    if (allowedFields.includes(key)) {
+    if (allowedFields.includes(key) && value !== undefined) {
       const dbValue = key === 'tags' ? JSON.stringify(value) : value;
       setClause.push(`${key} = $${paramIndex}`);
       values.push(dbValue);

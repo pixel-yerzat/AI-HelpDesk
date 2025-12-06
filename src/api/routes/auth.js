@@ -110,26 +110,22 @@ router.get('/me',
   })
 );
 
-// Update current user
+// Update current user profile
 router.put('/me',
   authenticate,
   asyncHandler(async (req, res) => {
-    const { name, password, current_password } = req.body;
+    const { name, email } = req.body;
 
     const updates = {};
 
-    if (name) {
-      updates.name = name;
-    }
-
-    if (password) {
-      // Verify current password
-      const user = await User.getUserByEmail(req.user.email);
-      const isValid = await User.verifyPassword(user, current_password);
-      if (!isValid) {
-        throw ApiError.badRequest('Current password is incorrect');
+    if (name) updates.name = name;
+    if (email && email !== req.user.email) {
+      // Check if email already taken
+      const existing = await User.getUserByEmail(email);
+      if (existing) {
+        throw ApiError.conflict('Email already taken');
       }
-      updates.password = password;
+      updates.email = email;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -146,6 +142,38 @@ router.put('/me',
         name: updatedUser.name,
         role: updatedUser.role,
       },
+    });
+  })
+);
+
+// Change password
+router.put('/password',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      throw ApiError.badRequest('oldPassword and newPassword are required');
+    }
+
+    if (newPassword.length < 8) {
+      throw ApiError.badRequest('Password must be at least 8 characters');
+    }
+
+    // Verify old password
+    const user = await User.getUserById(req.user.id);
+    const isValid = await User.verifyPassword(user, oldPassword);
+    if (!isValid) {
+      throw ApiError.badRequest('Current password is incorrect');
+    }
+
+    await User.updateUser(req.user.id, { password: newPassword });
+
+    logger.info('User changed password', { userId: req.user.id });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
     });
   })
 );

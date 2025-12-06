@@ -37,7 +37,7 @@ router.get('/drafts',
   requirePermission('tickets:approve'),
   asyncHandler(async (req, res) => {
     const drafts = await Ticket.getPendingDrafts(50);
-    res.json({ drafts });
+    res.json({ tickets: drafts });
   })
 );
 
@@ -188,7 +188,7 @@ router.post('/:id/messages',
     }
 
     const { id } = req.params;
-    const { content, send_to_user = false } = req.body;
+    const { content } = req.body;
 
     if (!content || !content.trim()) {
       throw ApiError.badRequest('Message content is required');
@@ -205,22 +205,25 @@ router.post('/:id/messages',
       content: content.trim(),
     });
 
-    // If send_to_user, queue outbound message
-    if (send_to_user) {
+    // Always send to user via their channel
+    try {
       await streams.addToStream('outbound_messages', {
         ticketId: id,
         source: ticket.source,
         sourceId: ticket.source_id,
         message: content.trim(),
       });
+    } catch (e) {
+      // Log error but don't fail the request
+      console.error('Failed to queue outbound message', e);
     }
 
-    // Update ticket status if it was waiting
+    // Update ticket status if it was new
     if (ticket.status === 'new') {
       await Ticket.updateTicket(id, { status: 'in_progress' });
     }
 
-    logAudit(id, req.user.id, 'message_added', { send_to_user });
+    logAudit(id, req.user.id, 'message_added', {});
 
     res.json({ success: true, message });
   })

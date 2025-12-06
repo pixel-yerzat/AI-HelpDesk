@@ -175,6 +175,40 @@ const migrations = [
       ON CONFLICT (key) DO NOTHING;
     `,
   },
+  {
+    name: '004_update_kb_multilang',
+    sql: `
+      -- Add multilanguage support to KB
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS title_ru VARCHAR(500);
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS title_kz VARCHAR(500);
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS content_ru TEXT;
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS content_kz TEXT;
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'faq';
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS keywords TEXT[];
+      ALTER TABLE kb_articles ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT true;
+
+      -- Migrate existing data
+      UPDATE kb_articles SET 
+        title_ru = COALESCE(title_ru, title),
+        content_ru = COALESCE(content_ru, body)
+      WHERE title_ru IS NULL;
+
+      -- Create notification table
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        message TEXT,
+        type VARCHAR(50) DEFAULT 'info',
+        is_read BOOLEAN DEFAULT false,
+        link VARCHAR(500),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+    `,
+  },
 ];
 
 async function runMigrations() {
