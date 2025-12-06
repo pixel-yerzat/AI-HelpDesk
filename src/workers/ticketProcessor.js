@@ -5,92 +5,13 @@ import { streams, connect as connectRedis } from '../utils/redis.js';
 import db from '../utils/database.js';
 import Ticket from '../models/Ticket.js';
 import KnowledgeBase from '../models/KnowledgeBase.js';
+import nlpService from '../services/nlp/index.js';
 import logger, { logAudit } from '../utils/logger.js';
 import config from '../config/index.js';
-import { TICKET_CATEGORIES, ESCALATION_KEYWORDS } from '../config/categories.js';
 
 const CONSUMER_GROUP = 'processors';
 const CONSUMER_NAME = `processor-${process.pid}`;
 const STREAM_KEY = 'ticket_processing';
-
-// Placeholder for LLM service - will be implemented in NLP module
-class NLPService {
-  async classifyTicket(text, language) {
-    // TODO: Implement with real LLM
-    // For now, return mock classification based on keywords
-    const lowerText = text.toLowerCase();
-    
-    for (const cat of TICKET_CATEGORIES) {
-      const matches = cat.keywords.filter(kw => lowerText.includes(kw.toLowerCase()));
-      if (matches.length > 0) {
-        return {
-          category: cat.code,
-          confidence: Math.min(0.6 + (matches.length * 0.1), 0.95),
-        };
-      }
-    }
-    
-    return { category: 'other', confidence: 0.5 };
-  }
-
-  async predictPriority(text, category) {
-    // TODO: Implement with real LLM
-    const lowerText = text.toLowerCase();
-    
-    // Check for escalation keywords
-    for (const keyword of ESCALATION_KEYWORDS) {
-      if (lowerText.includes(keyword.toLowerCase())) {
-        return { priority: 'high', confidence: 0.9 };
-      }
-    }
-    
-    return { priority: 'medium', confidence: 0.7 };
-  }
-
-  async triageTicket(text, category, kbResults) {
-    // TODO: Implement with real LLM
-    const categoryConfig = TICKET_CATEGORIES.find(c => c.code === category);
-    
-    if (categoryConfig?.autoResolvable && kbResults.length > 0) {
-      return {
-        triage: 'auto_resolvable',
-        confidence: 0.75,
-        recommendedAction: 'generate_response',
-      };
-    }
-    
-    return {
-      triage: 'manual',
-      confidence: 0.6,
-      recommendedAction: 'route_to_operator',
-    };
-  }
-
-  async generateResponse(ticketText, kbArticles, language) {
-    // TODO: Implement with real LLM RAG
-    if (kbArticles.length === 0) {
-      return null;
-    }
-
-    // Mock response
-    const article = kbArticles[0];
-    return {
-      response: `На основе нашей базы знаний:\n\n${article.body.substring(0, 500)}...\n\nЕсли это не помогло, пожалуйста, уточните ваш вопрос.`,
-      summary: `Вопрос о ${article.category}`,
-      kbRefs: [article.id],
-    };
-  }
-
-  async detectLanguage(text) {
-    // TODO: Use franc or LLM for detection
-    // Simple heuristic for now
-    const kazakh = /[әғқңөұүһі]/i;
-    if (kazakh.test(text)) return 'kz';
-    return 'ru';
-  }
-}
-
-const nlp = new NLPService();
 
 async function processTicket(ticketId, isNew) {
   logger.info('Processing ticket', { ticketId, isNew });
@@ -102,119 +23,137 @@ async function processTicket(ticketId, isNew) {
       return;
     }
 
-    // Skip if already processed
+    // Skip if already processed and not new
     if (ticket.category && !isNew) {
       logger.debug('Ticket already processed, skipping', { ticketId });
       return;
     }
 
-    // 1. Detect language
-    const language = await nlp.detectLanguage(ticket.body);
-    logger.debug('Language detected', { ticketId, language });
+    // Run full NLP pipeline
+    const nlpResults = await nlpService.processTicket(ticket);
 
-    // 2. Classify ticket
-    const classification = await nlp.classifyTicket(ticket.body, language);
-    logger.debug('Ticket classified', { ticketId, ...classification });
+    const topPrediction = nlpResults.classification.predictions[0];
+    const isEscalation = nlpResults.priority.escalation_required;
 
-    // 3. Predict priority
-    const priorityResult = await nlp.predictPriority(ticket.body, classification.category);
-    logger.debug('Priority predicted', { ticketId, ...priorityResult });
-
-    // 4. Check for escalation keywords
-    const needsEscalation = ESCALATION_KEYWORDS.some(kw => 
-      ticket.body.toLowerCase().includes(kw.toLowerCase())
-    );
-
-    if (needsEscalation) {
-      logger.info('Escalation triggered', { ticketId });
-      await Ticket.updateTicket(ticketId, { status: 'escalated', priority: 'critical' });
-      await Ticket.saveTicketNlp(ticketId, {
-        category: classification.category,
-        categoryConf: classification.confidence,
-        priority: 'critical',
-        priorityConf: 0.99,
-        triage: 'escalate',
-        triageConf: 0.99,
-        summary: `ESCALATION: ${ticket.subject}`,
-      });
-      logAudit(ticketId, 'system', 'auto_escalated', { reason: 'escalation_keyword' });
-      return;
-    }
-
-    // 5. Search KB for relevant articles
-    const kbResults = await KnowledgeBase.searchArticles(
-      ticket.body.substring(0, 200),
-      language,
-      5
-    );
-    logger.debug('KB search completed', { ticketId, resultsCount: kbResults.length });
-
-    // 6. Triage
-    const triageResult = await nlp.triageTicket(ticket.body, classification.category, kbResults);
-    logger.debug('Triage completed', { ticketId, ...triageResult });
-
-    // 7. Generate response if auto-resolvable
-    let suggestedResponse = null;
-    let summary = `${classification.category}: ${ticket.subject}`;
-
-    if (triageResult.triage === 'auto_resolvable') {
-      const response = await nlp.generateResponse(ticket.body, kbResults, language);
-      if (response) {
-        suggestedResponse = response.response;
-        summary = response.summary;
-      }
-    }
-
-    // 8. Save NLP results
-    await Ticket.saveTicketNlp(ticketId, {
-      category: classification.category,
-      categoryConf: classification.confidence,
-      priority: priorityResult.priority,
-      priorityConf: priorityResult.confidence,
-      triage: triageResult.triage,
-      triageConf: triageResult.confidence,
-      summary,
-      suggestedResponse,
-    });
-
-    // 9. Determine status based on thresholds
+    // Determine new status based on thresholds and results
     let newStatus = 'new';
-    
-    if (triageResult.triage === 'auto_resolvable' && 
-        classification.confidence >= config.thresholds.autoResolve &&
-        triageResult.confidence >= config.thresholds.triage &&
-        suggestedResponse) {
-      // High confidence - could auto-resolve, but use human-in-loop for safety
+    let resolvedBy = null;
+
+    if (isEscalation) {
+      // Immediate escalation
+      newStatus = 'escalated';
+      logger.info('Ticket escalated', { 
+        ticketId, 
+        reason: nlpResults.priority.escalation_reason 
+      });
+    } else if (
+      nlpResults.triage.auto_resolvable &&
+      topPrediction.confidence >= config.thresholds.autoResolve &&
+      nlpResults.triage.confidence >= config.thresholds.triage &&
+      nlpResults.response
+    ) {
+      // High confidence - create draft for approval (human-in-loop)
       newStatus = 'draft_pending';
-      logger.info('Ticket marked for approval', { ticketId, confidence: classification.confidence });
-    } else if (classification.confidence >= config.thresholds.draftMin && suggestedResponse) {
-      // Medium confidence - draft for review
+      logger.info('High confidence response generated, pending approval', {
+        ticketId,
+        confidence: topPrediction.confidence,
+      });
+    } else if (
+      topPrediction.confidence >= config.thresholds.draftMin &&
+      nlpResults.response
+    ) {
+      // Medium confidence - also create draft but with lower priority
       newStatus = 'draft_pending';
+      logger.info('Medium confidence response generated, pending approval', {
+        ticketId,
+        confidence: topPrediction.confidence,
+      });
+    } else {
+      // Low confidence or no response - route to operator
+      newStatus = 'in_progress';
+      logger.info('Ticket routed to operator', {
+        ticketId,
+        reason: 'Low confidence or no auto-response available',
+      });
     }
 
-    await Ticket.updateTicket(ticketId, { 
-      status: newStatus,
-      language,
+    // Save NLP results to database
+    await Ticket.saveTicketNlp(ticketId, {
+      category: topPrediction.category,
+      categoryConf: topPrediction.confidence,
+      priority: nlpResults.priority.priority,
+      priorityConf: nlpResults.priority.confidence,
+      triage: nlpResults.triage.auto_resolvable ? 'auto_resolvable' : 'manual',
+      triageConf: nlpResults.triage.confidence,
+      summary: nlpResults.response?.summary || `${topPrediction.category}: ${ticket.subject}`,
+      suggestedResponse: nlpResults.response?.answer || null,
+      embeddingsRef: null, // Can be set if we index tickets
     });
 
-    logAudit(ticketId, 'system', 'processed', {
-      category: classification.category,
-      categoryConf: classification.confidence,
-      priority: priorityResult.priority,
-      triage: triageResult.triage,
+    // Update ticket
+    await Ticket.updateTicket(ticketId, {
+      status: newStatus,
+      priority: nlpResults.priority.priority,
+    });
+
+    // Log audit
+    logAudit(ticketId, 'system', 'nlp_processed', {
+      category: topPrediction.category,
+      categoryConf: topPrediction.confidence,
+      priority: nlpResults.priority.priority,
+      triage: nlpResults.triage.auto_resolvable ? 'auto_resolvable' : 'manual',
       newStatus,
+      processingTimeMs: nlpResults.processingTimeMs,
+      kbRefsUsed: nlpResults.response?.kb_refs || [],
     });
 
-    logger.info('Ticket processed successfully', { 
-      ticketId, 
-      category: classification.category,
+    logger.info('Ticket processed successfully', {
+      ticketId,
+      category: topPrediction.category,
+      confidence: topPrediction.confidence,
       status: newStatus,
+      processingTimeMs: nlpResults.processingTimeMs,
     });
 
   } catch (error) {
-    logger.error('Error processing ticket', { ticketId, error: error.message, stack: error.stack });
+    logger.error('Error processing ticket', { 
+      ticketId, 
+      error: error.message, 
+      stack: error.stack 
+    });
+    
+    // Mark ticket as needing manual review on error
+    try {
+      await Ticket.updateTicket(ticketId, { status: 'in_progress' });
+      logAudit(ticketId, 'system', 'nlp_error', { error: error.message });
+    } catch (updateError) {
+      logger.error('Failed to update ticket after error', { ticketId });
+    }
+    
     throw error;
   }
+}
+
+async function processOutboundMessage(data) {
+  const { ticketId, source, sourceId, message } = data;
+  
+  logger.info('Processing outbound message', { ticketId, source });
+  
+  // TODO: Implement actual message sending via connectors
+  // For now, just log
+  logger.info('Outbound message queued', {
+    ticketId,
+    source,
+    sourceId,
+    messagePreview: message.substring(0, 100),
+  });
+
+  // Add to ticket messages
+  await Ticket.addTicketMessage(ticketId, {
+    sender: 'system',
+    senderType: 'bot',
+    content: message,
+  });
 }
 
 async function startWorker() {
@@ -224,35 +163,63 @@ async function startWorker() {
     // Connect to Redis
     await connectRedis();
     
-    // Create consumer group
+    // Create consumer groups
     await streams.createConsumerGroup(STREAM_KEY, CONSUMER_GROUP);
+    await streams.createConsumerGroup('outbound_messages', 'senders');
     
+    // Check NLP service health
+    const nlpHealth = await nlpService.healthCheck();
+    logger.info('NLP service health', nlpHealth);
+
+    if (nlpHealth.overall !== 'healthy') {
+      logger.warn('NLP service is not fully healthy, some features may be limited');
+    }
+
     logger.info('Worker ready, waiting for messages...');
 
     // Main processing loop
     while (true) {
       try {
-        const messages = await streams.readFromGroup(
+        // Process ticket queue
+        const ticketMessages = await streams.readFromGroup(
           STREAM_KEY,
           CONSUMER_GROUP,
           CONSUMER_NAME,
-          10,
-          5000 // Block for 5 seconds
+          5,
+          2000
         );
 
-        for (const { id, data } of messages) {
+        for (const { id, data } of ticketMessages) {
           try {
             await processTicket(data.ticketId, data.isNew);
             await streams.ack(STREAM_KEY, CONSUMER_GROUP, id);
           } catch (error) {
-            logger.error('Failed to process message', { messageId: id, error: error.message });
-            // Message will be redelivered after timeout
+            logger.error('Failed to process ticket message', { messageId: id, error: error.message });
           }
         }
+
+        // Process outbound message queue
+        const outboundMessages = await streams.readFromGroup(
+          'outbound_messages',
+          'senders',
+          CONSUMER_NAME,
+          5,
+          1000
+        );
+
+        for (const { id, data } of outboundMessages) {
+          try {
+            await processOutboundMessage(data);
+            await streams.ack('outbound_messages', 'senders', id);
+          } catch (error) {
+            logger.error('Failed to process outbound message', { messageId: id, error: error.message });
+          }
+        }
+
       } catch (error) {
         if (error.message.includes('NOGROUP')) {
-          // Group doesn't exist, recreate
           await streams.createConsumerGroup(STREAM_KEY, CONSUMER_GROUP);
+          await streams.createConsumerGroup('outbound_messages', 'senders');
         } else {
           logger.error('Error reading from stream', { error: error.message });
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -266,16 +233,17 @@ async function startWorker() {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('Worker shutting down...');
-  await db.close();
+const shutdown = async (signal) => {
+  logger.info(`Worker received ${signal}, shutting down...`);
+  try {
+    await db.close();
+  } catch (error) {
+    logger.error('Error during shutdown', { error: error.message });
+  }
   process.exit(0);
-});
+};
 
-process.on('SIGINT', async () => {
-  logger.info('Worker shutting down...');
-  await db.close();
-  process.exit(0);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startWorker();

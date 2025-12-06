@@ -12,7 +12,16 @@
     "lint": "eslint src/",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
-    "worker:processor": "node src/workers/ticketProcessor.js"
+    "test": "node tests/integration.test.js",
+    "test:api": "node tests/api.test.js",
+    "test:all": "npm run test && npm run test:api",
+    "worker:processor": "node src/workers/ticketProcessor.js",
+    "worker:outbound": "node src/workers/outboundSender.js",
+    "worker:telegram": "node src/workers/telegramBot.js",
+    "worker:whatsapp": "node src/workers/whatsappBot.js",
+    "worker:kb-indexer": "node src/workers/kbIndexer.js index-all",
+    "kb:index": "node src/workers/kbIndexer.js index-all",
+    "kb:stats": "node src/workers/kbIndexer.js stats"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -39,6 +48,8 @@
     "@qdrant/js-client-rest": "^1.7.0",
     "minio": "^7.1.3",
     "franc": "^6.1.0",
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode": "^1.5.3",
     "zod": "^3.22.4",
     "date-fns": "^2.30.0"
   },

@@ -3,12 +3,17 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import config from './config/index.js';
 import routes from './api/routes/index.js';
 import { errorHandler, notFoundHandler } from './api/middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import db from './utils/database.js';
 import { connect as connectRedis, streams } from './utils/redis.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -41,6 +46,9 @@ app.use(morgan(config.env === 'development' ? 'dev' : 'combined', {
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static files (admin pages)
+app.use('/admin', express.static(path.join(__dirname, 'public')));
 
 // API routes
 app.use(config.apiPrefix, routes);

@@ -134,6 +134,53 @@ PUT /api/v1/kb/:id
 DELETE /api/v1/kb/:id
 ```
 
+### NLP / AI
+
+```bash
+# Classify text
+POST /api/v1/nlp/classify
+{
+  "subject": "Не работает VPN",
+  "body": "При подключении ошибка 789"
+}
+
+# Generate RAG response
+POST /api/v1/nlp/generate-response
+{
+  "subject": "Не работает VPN",
+  "body": "При подключении ошибка 789",
+  "language": "ru"
+}
+
+# Vector search KB
+POST /api/v1/nlp/search-kb
+{
+  "query": "как сбросить пароль vpn",
+  "language": "ru",
+  "limit": 5
+}
+
+# Full NLP pipeline (test)
+POST /api/v1/nlp/process
+{
+  "subject": "Проблема с почтой",
+  "body": "Не приходят письма"
+}
+
+# Translate text
+POST /api/v1/nlp/translate
+{
+  "text": "Здравствуйте, как я могу вам помочь?",
+  "target_language": "kz"
+}
+
+# Index KB articles
+POST /api/v1/nlp/index-kb-all
+
+# NLP health check
+GET /api/v1/nlp/health
+```
+
 ### Админка
 
 ```bash
@@ -212,14 +259,169 @@ helpdesk-ai/
 - Health check: `GET /health`
 - Logs: `./logs/` или stdout в Docker
 
+## Коннекторы (Каналы)
+
+### WhatsApp (через QR-код)
+
+WhatsApp полностью интегрирован в систему тикетов. Подключается через QR-код, как WhatsApp Web.
+
+**Возможности:**
+- Приём сообщений → создание тикетов
+- Автоответы из базы знаний (RAG)
+- Отправка ответов операторов
+- Подтверждение решения (текстом "Да"/"Нет")
+- Оценка качества (числом 1-5)
+- Обработка изображений, документов, голосовых
+
+**Подключение:**
+1. Запустите worker: `npm run worker:whatsapp`
+2. Откройте `http://localhost:3000/admin/whatsapp.html`
+3. Нажмите "Подключить WhatsApp"
+4. Отсканируйте QR-код в WhatsApp → Связанные устройства
+
+**Текстовые команды пользователя:**
+- `Да`, `Yes`, `Помогло`, `Спасибо` → подтверждение решения
+- `Нет`, `No`, `Не помогло` → запрос помощи оператора
+- `1`-`5` → оценка качества поддержки
+
+**API управления:**
+```bash
+GET  /api/v1/whatsapp/status      # Статус подключения
+GET  /api/v1/whatsapp/qr          # Получить QR-код
+POST /api/v1/whatsapp/connect     # Начать подключение
+POST /api/v1/whatsapp/disconnect  # Отключить
+POST /api/v1/whatsapp/test-send   # Тест отправки
+GET  /api/v1/whatsapp/events      # SSE real-time
+```
+
+**Docker:**
+```bash
+docker compose up -d worker-whatsapp
+```
+
+**Важно:**
+- Сессия сохраняется в `./data/whatsapp-sessions/`
+- При `logout` нужно заново сканировать QR
+- Один номер = один бот (ограничение WhatsApp)
+
+### Telegram Bot
+
+Поддерживает два режима работы:
+
+**Polling (для разработки):**
+```bash
+npm run worker:telegram
+```
+
+**Webhook (для production):**
+1. Установите `TELEGRAM_WEBHOOK_URL` в `.env`
+2. Telegram будет отправлять обновления на `/api/v1/connectors/telegram/webhook`
+
+Функции:
+- Приём текстовых сообщений, фото, документов
+- Отправка ответов с форматированием (HTML)
+- Inline-кнопки для подтверждения решения и оценки
+- Команды: `/start`, `/help`, `/status`
+
+### Email (IMAP/SMTP)
+
+**Настройка в `.env`:**
+```
+IMAP_HOST=imap.example.com
+IMAP_PORT=993
+IMAP_USER=support@example.com
+IMAP_PASSWORD=password
+IMAP_TLS=true
+
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=support@example.com
+SMTP_PASSWORD=password
+SMTP_FROM=Support <support@example.com>
+```
+
+Функции:
+- Polling IMAP каждые 30 секунд
+- Автоматическое определение тредов (In-Reply-To, References)
+- Фильтрация автоответов
+- Очистка quoted text
+- Обработка вложений
+
+### Запуск воркеров
+
+```bash
+# Все воркеры через Docker Compose
+docker compose up -d
+
+# Отдельно для разработки:
+npm run worker:processor   # NLP обработка тикетов
+npm run worker:telegram    # Telegram бот
+npm run worker:outbound    # Отправка сообщений
+```
+
+### API управления коннекторами
+
+```bash
+# Статус всех коннекторов
+GET /api/v1/connectors/status
+
+# Статус конкретного коннектора
+GET /api/v1/connectors/status/telegram
+
+# Конфигурация (без секретов)
+GET /api/v1/connectors/config
+
+# Тестовая отправка
+POST /api/v1/connectors/test-send
+{
+  "connector": "telegram",
+  "recipient": "123456789",
+  "message": "Test message"
+}
+```
+
+## NLP Pipeline
+
+Система использует LLM (Claude/OpenAI) для:
+
+1. **Классификация тикетов** — определение категории и уверенности
+2. **Приоритизация** — оценка срочности, детекция ключевых слов эскалации
+3. **Triage** — решение об авто-ответе или маршрутизации оператору
+4. **RAG Response Generation** — генерация ответа на основе базы знаний
+5. **Перевод** — RU ↔ KZ перевод
+6. **Детекция языка** — автоматическое определение языка
+
+### Пороги принятия решений
+
+| Параметр | Значение | Действие |
+|----------|----------|----------|
+| confidence ≥ 0.90 | Auto-resolve | Черновик с высоким приоритетом |
+| 0.65 ≤ confidence < 0.90 | Draft | Черновик для проверки |
+| confidence < 0.65 | Manual | Маршрутизация оператору |
+| Escalation keywords | Immediate | Эскалация |
+
+### Vector DB (Qdrant)
+
+KB статьи индексируются в Qdrant для семантического поиска:
+
+```bash
+# Индексировать все статьи
+npm run kb:index
+
+# Проверить статистику
+npm run kb:stats
+```
+
 ## TODO
 
-- [ ] Полная интеграция с Anthropic/OpenAI API
-- [ ] Vector embeddings для KB
+- [x] Полная интеграция с Anthropic/OpenAI API
+- [x] Vector embeddings для KB (Qdrant)
+- [x] RAG pipeline
 - [ ] Telegram mini-app для исполнителей
 - [ ] ITSM интеграция
 - [ ] Viber/Teams коннекторы
 - [ ] React frontend (Admin Dashboard, Operator Console)
+- [ ] Fine-tuning классификатора на исторических данных
 
 ## Лицензия
 
