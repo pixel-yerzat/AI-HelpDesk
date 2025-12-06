@@ -412,17 +412,3 @@ npm run kb:index
 npm run kb:stats
 ```
 
-## TODO
-
-- [x] Полная интеграция с Anthropic/OpenAI API
-- [x] Vector embeddings для KB (Qdrant)
-- [x] RAG pipeline
-- [ ] Telegram mini-app для исполнителей
-- [ ] ITSM интеграция
-- [ ] Viber/Teams коннекторы
-- [ ] React frontend (Admin Dashboard, Operator Console)
-- [ ] Fine-tuning классификатора на исторических данных
-
-## Лицензия
-
-Private / Internal Use
